@@ -3,7 +3,7 @@ using System.Text;
 
 namespace PhiveSharp.Havok;
 
-public sealed class TagFile
+public sealed partial class TagFile
 {
     private const int ChunkHeaderSize = 8;
     private const uint SizeMask = 0x3FFFFFFF;

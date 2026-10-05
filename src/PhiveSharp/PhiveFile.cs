@@ -98,6 +98,11 @@ public sealed class PhiveFile
             // carries the offset of whatever comes after it, so zero is unambiguous.
             if (offset == 0) break;
 
+            // Some tools empty a section without pulling the ones after it back, leaving its old
+            // bytes behind as a hole. Nothing declares it, so it is dropped, and a write closes it up.
+            if (offset > end && offset <= data.Length && file.Sections.Count > 0 && file.Sections[^1].Length == 0)
+                end = offset;
+
             if (offset != end)
                 throw new InvalidDataException(
                     $"Section {i} starts at 0x{offset:X} where 0x{end:X} was expected; " +
