@@ -592,8 +592,16 @@ public sealed class TagFile
             if ((first & 0x80) == 0) return first;
             if ((first & 0xC0) == 0x80) return ((first & 0x3F) << 8) | _body[_position++];
             if ((first & 0xE0) == 0xC0) return ((first & 0x1F) << 16) | (_body[_position++] << 8) | _body[_position++];
-            if ((first & 0xF0) == 0xE0)
-                return ((first & 0x0F) << 24) | (_body[_position++] << 16) | (_body[_position++] << 8) | _body[_position++];
+            if ((first & 0xF8) == 0xE0)
+                return ((first & 0x07) << 24) | (_body[_position++] << 16) | (_body[_position++] << 8) | _body[_position++];
+            if ((first & 0xF8) == 0xE8)
+            {
+                long value = first & 0x07;
+                for (int i = 0; i < 4; i++) value = (value << 8) | _body[_position++];
+                return value <= int.MaxValue
+                    ? (int)value
+                    : throw new InvalidDataException($"Packed integer 0x{value:X} does not fit in 32 bits.");
+            }
 
             throw new InvalidDataException($"Unsupported packed integer prefix 0x{first:X2}.");
         }
@@ -627,7 +635,7 @@ public sealed class TagFile
                 output.WriteByte((byte)(value >> 8));
                 output.WriteByte((byte)value);
             }
-            else if (value < 0x10000000)
+            else if (value < 0x8000000)
             {
                 output.WriteByte((byte)(0xE0 | (value >> 24)));
                 output.WriteByte((byte)(value >> 16));
@@ -636,7 +644,11 @@ public sealed class TagFile
             }
             else
             {
-                throw new ArgumentOutOfRangeException(nameof(value), value, "Too large for a packed integer.");
+                output.WriteByte(0xE8);
+                output.WriteByte((byte)(value >> 24));
+                output.WriteByte((byte)(value >> 16));
+                output.WriteByte((byte)(value >> 8));
+                output.WriteByte((byte)value);
             }
         }
     }

@@ -2,7 +2,7 @@
 
 A C# reader and writer for **Phive**, the container Nintendo wraps Havok physics data in for
 *Tears of the Kingdom* — the static compound bodies under `Phive/StaticCompoundBody`, the
-shapes, the navmeshes — and for the Havok tagfiles inside them.
+shapes, the navmeshes, the cloth — and for the Havok tagfiles inside them.
 
 ```csharp
 StaticCompoundBody compound = StaticCompoundBody.FromBinary(decompressed);
@@ -35,9 +35,9 @@ compound.WriteTo("Cave_Akkala_0005.Nin_NX_NVN.bphsc");
 dictionary; decompress first — `ZsDicSharp` does that — and compress the bytes this gives back.
 There are no dependencies.
 
-Read and written back untouched, all 13,150 Phive files in the dump this was written against
+Read and written back untouched, all 13,534 Phive files in the dump this was written against
 come out byte for byte identical — static compounds included, hash map and body table and all —
-and so do the 26,331 Havok tagfiles inside them. Every one of their 490,506 shape instances
+and so do the 26,715 Havok tagfiles inside them. Every one of their 490,506 shape instances
 reads, and every shape pointer follows.
 
 ## What the formats do that is not obvious
