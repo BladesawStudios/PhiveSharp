@@ -86,13 +86,14 @@ sits and the hash names the actor that placed it.
 
 **Field tiles carry half a megabyte of terrain collision** in sections 8, 9 and 10, at exactly
 0x80000, 0x20000 and 0xC0 bytes. Nothing else has them, and this does not decode them: they are
-carried through as bytes, as are the per body property tables in sections 5 and 6.
+carried through as bytes.
 
 ## What this does not model
 
-Sections 5 to 10 of a static compound are kept as bytes. A body names a run of entries in the
-property tables and that link is followed, but the entries themselves are not decoded, and
-neither is the terrain collision.
+Sections 5 to 10 of a static compound are kept as bytes. A body's run of entries in the property
+tables in sections 5 and 6 reads as its material palette (`MaterialsOf`), the same sixteen byte
+material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`), but
+material and flag values are numbers, not names. The terrain collision is not decoded.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item

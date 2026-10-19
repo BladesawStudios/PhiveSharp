@@ -149,6 +149,8 @@ public sealed class StaticCompoundBody
     private const int HashSection = 2;
     private const int HashIndexSection = 3;
     private const int BodySection = 4;
+    private const int PropertySection = 5;
+    private const int PropertyFilterSection = 6;
 
     /// <summary>The first section a shape can be in. Everything below it is engine tables.</summary>
     public const int FirstShapeSection = 11;
@@ -323,6 +325,14 @@ public sealed class StaticCompoundBody
         if (!actor.HasBodies) yield break;
         for (int i = actor.FirstBody; i <= actor.LastBody && i < Bodies.Count; i++) yield return Bodies[i];
     }
+
+    /// <summary>
+    /// A body's material palette, from the property tables in sections 5 and 6. The mesh shape the
+    /// body is an instance of tags its primitives with indices into this.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The body's run is past the end of the tables.</exception>
+    public List<PhiveMaterial> MaterialsOf(CompoundBody body) =>
+        PhiveMaterial.Read(Container[PropertySection], Container[PropertyFilterSection], body.FirstProperty, body.PropertyCount);
 
     /// <summary>The sections holding shapes, whether as tagfiles or as nested containers.</summary>
     public IEnumerable<int> ShapeSections
