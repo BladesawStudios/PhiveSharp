@@ -132,8 +132,8 @@ named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still
 
 - the six bits of a navmesh face between its user tags and its material - of which only three are
   ever set, one of them on every face that links an actor;
-- what a water cylinder's or quadrant's four parameters mean beyond telling quicksand from a
-  whirlpool, and a second hash a few water records carry.
+- the two values a water cylinder's shape keeps, a number each water record passes to its shape,
+  and a second hash a few of them carry.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item
