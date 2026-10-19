@@ -131,20 +131,27 @@ public readonly record struct CompoundGroup(int PlacementId, int Slot, int Layer
 /// <see cref="Scale"/> Y below its transform. The <see cref="Parameters"/> shape the rest:
 /// <list type="bullet">
 /// <item>a cylinder: how far its surface dips at the centre (the game builds a funnel when this is set),
-/// then two values its shape keeps - the game scales them by 3 and 1.5 for plain water - and one unused;</item>
+/// then the speed it pulls things outward at its rim - negative pulls them in - and the speed it swirls
+/// them round, both rising toward the centre by 3 and 1.5 times for plain water; and one unused;</item>
 /// <item>a quadrant: the height and the radius of its curve and the thickness of the box under it, and
 /// one unused (a right angle in the shipped files).</item>
 /// </list>
 /// </remarks>
 /// <param name="PlacementId">The <see cref="CompoundPlacement.Id"/> it came in with, or zero.</param>
-/// <param name="Setting">A small number passed to a box's shape as is; not decoded.</param>
-/// <param name="Strength">A number passed to the shape as is - at least a half for a quadrant; not decoded.</param>
+/// <param name="FlowMode">
+/// How a box's water flows: 0 along its own Z axis, 1 and 2 turning between its X and Z axes across
+/// the box, one way or the other.
+/// </param>
+/// <param name="FlowSpeed">
+/// How fast a box or quadrant carries things along; a quadrant's is at least a half, and scaled by 4.5
+/// up to 10.
+/// </param>
 /// <param name="Material">An index into PhiveConfig's material collection: water, hot water, ice water, sand and so on.</param>
-/// <param name="Hash">The Banc hash of the actor it belongs to, or zero.</param>
+/// <param name="Hash">The Banc hash of the actor whose presence switches the water on, or zero.</param>
 /// <param name="SecondHash">A second hash, on a few; not decoded.</param>
 /// <param name="Parameters">Four more floats for a cylinder or a quadrant, none for a box.</param>
 public sealed record CompoundWater(
-    int PlacementId, int Setting, float Strength, Vector3 Scale, Vector3 Rotate, Vector3 Translate,
+    int PlacementId, int FlowMode, float FlowSpeed, Vector3 Scale, Vector3 Rotate, Vector3 Translate,
     int Material, ulong Hash, ulong SecondHash, float[] Parameters)
 {
     public string? MaterialName => Material >= 0 && Material < PhiveMaterial.MaterialNames.Count ? PhiveMaterial.MaterialNames[Material] : null;

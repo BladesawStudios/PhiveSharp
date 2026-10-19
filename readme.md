@@ -100,10 +100,11 @@ and the last byte of `Info` (`Persistence`) says how far down that list the body
 also be marked to start with its bodies off (`StartsDisabled`) until it turns them on itself.
 
 **After the shapes come more water and the ground.** Water outside the tile's height field -
-quicksand pits and whirlpools among it - is records rather than shapes: a section of boxes, one of cylinders and one of quadrants, each record
-a transform, a material and the hash of the actor it belongs to (`WaterBoxes`, `WaterCylinders`,
-`WaterQuadrants`). Then a table of external meshes and a nested `.bphsh` for each - every field tile
-has exactly one, its ground (`ExternalMeshes`).
+quicksand pits and whirlpools among it - is records rather than shapes: a section of boxes, one of
+cylinders and one of quadrants, each record a transform, a material, how it flows, and the hash of
+the actor whose presence switches it on (`WaterBoxes`, `WaterCylinders`, `WaterQuadrants`). Then a
+table of external meshes and a nested `.bphsh` for each - every field tile has exactly one, its
+ground (`ExternalMeshes`).
 
 **Field tiles carry half a megabyte of water** in sections 7 to 10: the height field the game
 builds each tile's `_TeraWater` body from. Section 7 says how big the tile is and where, and how big
@@ -133,8 +134,7 @@ sections 1 and 2 (`PhiveShape`). Materials, sub materials, flags and the layers 
 named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still only carried:
 
 - bit 24 of a navmesh face, set on a few thousand, which the game's pathfinding filters do not read;
-- the two values a water cylinder's shape keeps, a number each water record passes to its shape,
-  and a second hash a few of them carry.
+- a second hash a few water records carry, which nothing building the water reads.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item
