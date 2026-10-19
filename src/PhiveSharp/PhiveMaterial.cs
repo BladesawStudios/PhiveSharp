@@ -86,6 +86,26 @@ public readonly record struct PhiveMaterial(int Material, int SubMaterial, ulong
         "BondConnection"
     ];
 
+    public static IReadOnlyList<string> SensorLayerNames { get; } =
+    [
+        "Object", "SmallObject", "Player", "Enemy", "EnemyZonau", "NPC", "Friendly", "Animal", "TgtHitAll",
+        "PlayerAttack", "EnemyAttack", "EnemyZonauAttack", "NPCAttack", "FriendlyAttack", "AttackAll",
+        "ChemicalObject", "ChemicalElement", "InDoor", "StaticGeneralArea", "QueryOnly", "Tree", "Camera", "NoHit",
+        "CustomReceiver", "PerceptionSensor", "PerceptionEmitter", "Miasma", "Fluid", "ForbidAutoPlacementArea",
+        "SpecialChemical", "GeneralArea", "Tar"
+    ];
+
+    public static IReadOnlyList<string> SensorSubLayerNames { get; } =
+    [
+        "Unspecified", "PerceptionPlayer", "PerceptionCapturable", "PerceptionEnemy", "PerceptionZonauEnemy",
+        "PerceptionEquipment", "PerceptionDestructible", "PerceptionHorse", "PerceptionInterestEmitActor",
+        "PerceptionLiftable", "PerceptionNPC", "PerceptionNPCNoCombat", "PerceptionObject", "PerceptionPrey",
+        "PerceptionPredator", "PerceptionSage", "PerceptionShootable", "PerceptionCaveMaster", "PerceptionItemOreG",
+        "Area", "LocalTemperature", "Rope", "SpecialChemical", "Dust", "ForEnergyGauge", "LocalTemperatureWarm",
+        "DestructibleActor", "EnemyLookoutArea", "SidonWaterArea", "LowGravityArea", "SageLightOrbArea",
+        "LocationArea"
+    ];
+
     public static IReadOnlyList<string> FlagNames { get; } =
     [
         "NoClimb", "LadderUp", "Ladder", "Slip", "LadderSide", "NoSlipRainOnClimb", "NoDashUp", "Abyss",

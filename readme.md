@@ -84,6 +84,15 @@ leaves every placement empty. What fills one is a compound baked somewhere other
 used — a well, a sky island, a merged set — where the transform says where the whole compound
 sits and the hash names the actor that placed it.
 
+**The game makes one rigid body per layer, not per actor.** The two tables at the front of section 0
+are the compound's groups: a layer and a placement slot each, entities in the first and sensors in
+the second, ending at a layer of `0xFF`. Each becomes a rigid body named
+`<compound>_Entity_<layer>_<slot>`, whose shape is the shape section in the same position, entity
+groups first; a field tile's ground mesh is one section more. A body's `Info` word says which group
+it is in - entity or sensor, layer, sub layer - and an actor placed with a sub-compound carries that
+placement's id and slot in what was its reserved space. `EntityGroups`, `SensorGroups` and the
+properties on `CompoundBody` and `CompoundActor` unpack them.
+
 **Field tiles carry half a megabyte of water** in sections 7 to 10: the height field the game
 builds each tile's `_TeraWater` body from. Section 7 says how big the tile is and where, and how big
 the grid is; section 8 is a surface, a flow and a fluid per sample on a 256 by 256 grid; section 9 is
@@ -103,12 +112,14 @@ their sage wall, and the game enables and disables those faces as their actors c
 
 ## What this does not model
 
-Sections 5 to 10 of a static compound are kept as bytes. A body's run of entries in the property
+A body's run of entries in the property
 tables in sections 5 and 6 reads as its material palette (`MaterialsOf`), the same sixteen byte
 material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`). Materials,
 sub materials, flags and the layers a filter hits are named from `Phive/Config/PhiveConfig.byml`'s own
 tables. A navmesh face's four bits after its actor index are taken to be PhiveConfig's four user tags
-in order, which is not confirmed, and the six above them are not decoded.
+in order, which is not confirmed, and the six above them are not decoded. Nor are a body's last `Info`
+byte, an actor's one flag byte, the high half of a placement's id, or the small numbers at the end of
+section 0.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item

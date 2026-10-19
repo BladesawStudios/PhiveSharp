@@ -33,12 +33,22 @@ public sealed class CompoundActor
     public int LastBody { get; set; } = -1;
 
     /// <summary>
-    /// The twelve bytes after the hashes. They are zero in all but a handful of the shipped
-    /// files, and what the exceptions mean is not known, so they are carried through.
+    /// The twelve bytes after the hashes. For an actor that came in with a placed sub-compound they
+    /// name that placement - <see cref="PlacementId"/> and <see cref="PlacementSlot"/> - and one
+    /// byte more, <see cref="Flag"/>, is set on some actors for a reason not known.
     /// </summary>
     public byte[] Reserved { get; set; } = new byte[12];
 
     public bool HasBodies => FirstBody >= 0;
+
+    /// <summary>The low half of the <see cref="CompoundPlacement.Id"/> the actor came in with, or zero.</summary>
+    public int PlacementId => BinaryPrimitives.ReadUInt16LittleEndian(Reserved);
+
+    /// <summary>The slot in <see cref="StaticCompoundBody.Placements"/> the actor came in with, or zero.</summary>
+    public int PlacementSlot => Reserved[4];
+
+    /// <summary>Byte 7 of <see cref="Reserved"/>, set on about one actor in fifty; not decoded.</summary>
+    public int Flag => Reserved[7];
 
     public override string ToString() => $"{Hash:X16} bodies {FirstBody}..{LastBody}";
 }
@@ -49,8 +59,8 @@ public sealed class CompoundActor
 /// </summary>
 /// <param name="Index">The entry's own position in the table, as stored.</param>
 /// <param name="Info">
-/// A word that is nearly constant within a file - 0x1000800 and 0x2000b00 are the common values
-/// - and looks like a description of the body kind. Not decoded.
+/// What kind of body it is, a byte each: entity or sensor, the layer, the sub layer, and a last
+/// byte, 0 to 2, that is not decoded. See <see cref="IsSensor"/> and <see cref="Layer"/>.
 /// </param>
 /// <param name="ActorIndex">
 /// The owning actor, indexing <see cref="StaticCompoundBody.Actors"/>. It always agrees with
@@ -66,7 +76,40 @@ public sealed class CompoundActor
 /// </param>
 /// <param name="PropertyCount">How many property entries the body uses.</param>
 public readonly record struct CompoundBody(
-    uint Index, uint Info, int ActorIndex, int Slot, int FirstProperty, int PropertyCount);
+    uint Index, uint Info, int ActorIndex, int Slot, int FirstProperty, int PropertyCount)
+{
+    /// <summary>A sensor body rather than an entity; the compound counts each kind in its header.</summary>
+    public bool IsSensor => (Info & 0xFF) == 1;
+
+    /// <summary>The body's layer: an entity layer, or a sensor layer for a sensor.</summary>
+    public int Layer => (int)(Info >> 8) & 0xFF;
+
+    /// <summary>The body's sub layer, from the entity or sensor sub layers to match.</summary>
+    public int SubLayer => (int)(Info >> 16) & 0xFF;
+
+    public string? LayerName => Name(IsSensor ? PhiveMaterial.SensorLayerNames : PhiveMaterial.LayerNames, Layer);
+
+    public string? SubLayerName => Name(IsSensor ? PhiveMaterial.SensorSubLayerNames : PhiveMaterial.SubLayerNames, SubLayer);
+
+    private static string? Name(IReadOnlyList<string> names, int i) => i < names.Count ? names[i] : null;
+}
+
+/// <summary>
+/// One of the compound's rigid bodies: every body on one layer from one placement goes into the same
+/// one, named <c>&lt;compound&gt;_Entity_&lt;layer&gt;_&lt;slot&gt;</c> or the same with <c>Sensor</c>,
+/// and its shape is the shape section in the same place in order - entity groups first.
+/// </summary>
+/// <param name="PlacementId">The low half of the placement's <see cref="CompoundPlacement.Id"/>; zero for slot 0.</param>
+/// <param name="Slot">The slot in <see cref="StaticCompoundBody.Placements"/>.</param>
+/// <param name="Layer">The entity or sensor layer.</param>
+public readonly record struct CompoundGroup(int PlacementId, int Slot, int Layer)
+{
+    /// <summary>Unpacks an entry of <see cref="StaticCompoundBody.TagsA"/> or <see cref="StaticCompoundBody.TagsB"/>, which are read big endian.</summary>
+    public static CompoundGroup FromTag(uint tag) => new((int)((tag >> 24) | (tag >> 8 & 0xFF00)), (int)(tag >> 8) & 0xFF, (int)tag & 0xFF);
+
+    /// <summary>The layer value that ends a table.</summary>
+    public const int End = 0xFF;
+}
 
 /// <summary>
 /// A transform the compound was built under, with the hash of the actor it belongs to.
@@ -83,7 +126,10 @@ public sealed class CompoundPlacement
     /// <summary>Rotation in radians about each axis, the same three floats Banc stores.</summary>
     public Vector3 Rotate { get; set; }
 
-    /// <summary>An identifier for the placement; 0xFFFF in an unused slot.</summary>
+    /// <summary>
+    /// An identifier for the placement; 0xFFFF in an unused slot. Its low half is what the groups and
+    /// actors placed with it carry; the high half, 0 to 5, is not decoded.
+    /// </summary>
     public uint Id { get; set; } = Empty;
 
     /// <summary>The four bytes after the id, always zero in the shipped files.</summary>
@@ -108,13 +154,12 @@ public sealed class CompoundPlacement
 /// followed:
 ///
 /// <list type="bullet">
-/// <item>section 0, a fixed 19,120 byte block: the counts, the placements, and the name;</item>
+/// <item>section 0, a fixed 19,120 byte block: the entity and sensor groups, the counts, the placements, and the name;</item>
 /// <item>section 1, the actor table;</item>
 /// <item>sections 2 and 3, the hash map over it, which are rebuilt on write;</item>
 /// <item>section 4, the body table;</item>
-/// <item>sections 5 and 6, per body properties, carried through as bytes;</item>
-/// <item>section 7, eighty bytes that are zero except in field tiles;</item>
-/// <item>sections 8 to 10, present only in field tiles, half a megabyte of terrain collision;</item>
+/// <item>sections 5 and 6, each body's material palette (<see cref="MaterialsOf"/>);</item>
+/// <item>sections 7 to 10, a field tile's water (<see cref="Water"/>);</item>
 /// <item>sections 11 and up, the shapes: Havok tagfiles and nested containers.</item>
 /// </list>
 ///
@@ -171,26 +216,30 @@ public sealed class StaticCompoundBody
     public List<CompoundPlacement> Placements { get; } = [];
 
     /// <summary>
-    /// The first of the two four byte tables at the front of section 0, read big endian, which
-    /// is how the small values it holds come out as small numbers.
+    /// The entity groups, as stored: the first of the two four byte tables at the front of section 0,
+    /// read big endian. <see cref="EntityGroups"/> unpacks them.
     /// </summary>
-    /// <remarks>
-    /// Every file has a handful of entries - 2, 8, 9, 10, 11, 23, 26, 28 - and what they select
-    /// is not known. They are kept so the section can be written back.
-    /// </remarks>
     public List<uint> TagsA { get; } = [];
 
-    /// <summary>The second table, which starts halfway through the block at entry 2048.</summary>
+    /// <summary>The sensor groups, as stored: the second table, halfway through the block at entry 2048.</summary>
     public List<uint> TagsB { get; } = [];
 
     /// <summary>
-    /// How many bodies are of the first kind. The body table holds these and then
-    /// <see cref="KindBCount"/> of a second kind; what separates them is not known, so adding
-    /// bodies means saying which kind they are by hand.
+    /// The rigid bodies the game makes for the entity bodies, one per layer and placement, in the order
+    /// of the shape sections that hold them.
+    /// </summary>
+    public IEnumerable<CompoundGroup> EntityGroups => TagsA.Select(CompoundGroup.FromTag);
+
+    /// <summary>The same for the sensor bodies, whose shape sections follow the entity groups'.</summary>
+    public IEnumerable<CompoundGroup> SensorGroups => TagsB.Select(CompoundGroup.FromTag);
+
+    /// <summary>
+    /// How many entity bodies the body table holds - the ones whose <see cref="CompoundBody.IsSensor"/> is
+    /// false. Adding a body means counting it here or in <see cref="KindBCount"/>.
     /// </summary>
     public int KindACount { get; set; }
 
-    /// <summary>How many bodies are of the second kind.</summary>
+    /// <summary>How many sensor bodies the body table holds.</summary>
     public int KindBCount { get; set; }
 
     /// <summary>How many entries the property tables in sections 5 and 6 hold.</summary>
@@ -199,7 +248,7 @@ public sealed class StaticCompoundBody
     /// <summary>The second copy of <see cref="PropertyCount"/>, which the header also carries.</summary>
     public int PropertyCount2 { get; set; }
 
-    /// <summary>The forty eight bytes at the end of section 0. Flags of some sort; not decoded.</summary>
+    /// <summary>The forty eight bytes at the end of section 0: small numbers in the last four words; not decoded.</summary>
     public byte[] Trailer { get; set; } = new byte[TrailerSize];
 
     private StaticCompoundBody(PhiveFile container) => Container = container;
