@@ -130,7 +130,8 @@ A body's run of entries in the property tables in sections 5 and 6 reads as its 
 sections 1 and 2 (`PhiveShape`). Materials, sub materials, flags and the layers a filter hits are
 named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still only carried:
 
-- the six bits of a navmesh face between its user tags and its material;
+- the six bits of a navmesh face between its user tags and its material - of which only three are
+  ever set, one of them on every face that links an actor;
 - what a water cylinder's or quadrant's four parameters mean beyond telling quicksand from a
   whirlpool, and a second hash a few water records carry.
 

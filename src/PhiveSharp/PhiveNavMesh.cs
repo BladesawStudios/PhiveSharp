@@ -101,7 +101,11 @@ public readonly record struct PhiveNavFace(int Value)
         }
     }
 
-    /// <summary>Bits 20 to 25, which are set on some faces and not decoded.</summary>
+    /// <summary>
+    /// Bits 20 to 25, not decoded. Only 22, 23 and 24 are ever set: 23 on every face with a
+    /// <see cref="LinkedActor"/> and a few thousand without, 22 almost only on linked faces, 24 almost
+    /// only on unlinked ones.
+    /// </summary>
     public int Unknown => (Value >> 20) & 0x3F;
 
     /// <summary>The face's navmesh material, by PhiveConfig's <c>NavMeshMaterialCollection</c>.</summary>
