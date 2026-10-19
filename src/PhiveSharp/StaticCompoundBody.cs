@@ -34,21 +34,28 @@ public sealed class CompoundActor
 
     /// <summary>
     /// The twelve bytes after the hashes. For an actor that came in with a placed sub-compound they
-    /// name that placement - <see cref="PlacementId"/> and <see cref="PlacementSlot"/> - and one
-    /// byte more, <see cref="Flag"/>, is set on some actors for a reason not known.
+    /// name that placement - <see cref="PlacementId"/> and <see cref="PlacementSlot"/> - and byte 7
+    /// is <see cref="StartsDisabled"/>.
     /// </summary>
     public byte[] Reserved { get; set; } = new byte[12];
 
     public bool HasBodies => FirstBody >= 0;
 
-    /// <summary>The low half of the <see cref="CompoundPlacement.Id"/> the actor came in with, or zero.</summary>
+    /// <summary>The <see cref="CompoundPlacement.Id"/> the actor came in with, or zero.</summary>
     public int PlacementId => BinaryPrimitives.ReadUInt16LittleEndian(Reserved);
 
     /// <summary>The slot in <see cref="StaticCompoundBody.Placements"/> the actor came in with, or zero.</summary>
     public int PlacementSlot => Reserved[4];
 
-    /// <summary>Byte 7 of <see cref="Reserved"/>, set on about one actor in fifty; not decoded.</summary>
-    public int Flag => Reserved[7];
+    /// <summary>
+    /// The game switches the actor's bodies off as the compound loads - as far as
+    /// <see cref="CompoundBody.Persistence"/> goes, all of them - until the actor itself turns them on.
+    /// </summary>
+    public bool StartsDisabled
+    {
+        get => Reserved[7] != 0;
+        set => Reserved[7] = (byte)(value ? 1 : 0);
+    }
 
     public override string ToString() => $"{Hash:X16} bodies {FirstBody}..{LastBody}";
 }
@@ -59,16 +66,15 @@ public sealed class CompoundActor
 /// </summary>
 /// <param name="Index">The entry's own position in the table, as stored.</param>
 /// <param name="Info">
-/// What kind of body it is, a byte each: entity or sensor, the layer, the sub layer, and a last
-/// byte, 0 to 2, that is not decoded. See <see cref="IsSensor"/> and <see cref="Layer"/>.
+/// What kind of body it is, a byte each: entity or sensor, the layer, the sub layer, and how long it
+/// outlasts its actor. See <see cref="IsSensor"/>, <see cref="Layer"/> and <see cref="Persistence"/>.
 /// </param>
 /// <param name="ActorIndex">
 /// The owning actor, indexing <see cref="StaticCompoundBody.Actors"/>. It always agrees with
 /// that actor's <see cref="CompoundActor.FirstBody"/> range, so the link can be followed either way.
 /// </param>
-/// <param name="Slot">
-/// The body's place within its actor's run, restarting when <paramref name="FirstProperty"/>
-/// moves to a new group.
+/// <param name="Instance">
+/// The body's instance in its group's compound shape, whose <c>shapeTag</c> is the body's index back.
 /// </param>
 /// <param name="FirstProperty">
 /// Where this body's entries start in the property tables - sections 5 and 6, one sixteen byte
@@ -76,8 +82,16 @@ public sealed class CompoundActor
 /// </param>
 /// <param name="PropertyCount">How many property entries the body uses.</param>
 public readonly record struct CompoundBody(
-    uint Index, uint Info, int ActorIndex, int Slot, int FirstProperty, int PropertyCount)
+    uint Index, uint Info, int ActorIndex, int Instance, int FirstProperty, int PropertyCount)
 {
+    /// <summary>
+    /// How far the body outlasts its actor. The game switches an actor's instances on and off with a
+    /// level - -1 while the actor is live, 0 once a static compound controller has it, 1 once it is
+    /// disabled or taken over, 3 to remove it - and keeps a body on while the level is below this:
+    /// 0 for only while the actor is live, 1 for under a controller too, 2 for after it is gone.
+    /// </summary>
+    public int Persistence => (int)(Info >> 24);
+
     /// <summary>A sensor body rather than an entity; the compound counts each kind in its header.</summary>
     public bool IsSensor => (Info & 0xFF) == 1;
 
@@ -99,7 +113,7 @@ public readonly record struct CompoundBody(
 /// one, named <c>&lt;compound&gt;_Entity_&lt;layer&gt;_&lt;slot&gt;</c> or the same with <c>Sensor</c>,
 /// and its shape is the shape section in the same place in order - entity groups first.
 /// </summary>
-/// <param name="PlacementId">The low half of the placement's <see cref="CompoundPlacement.Id"/>; zero for slot 0.</param>
+/// <param name="PlacementId">The placement's <see cref="CompoundPlacement.Id"/>; zero for slot 0.</param>
 /// <param name="Slot">The slot in <see cref="StaticCompoundBody.Placements"/>.</param>
 /// <param name="Layer">The entity or sensor layer.</param>
 public readonly record struct CompoundGroup(int PlacementId, int Slot, int Layer)
@@ -110,6 +124,26 @@ public readonly record struct CompoundGroup(int PlacementId, int Slot, int Layer
     /// <summary>The layer value that ends a table.</summary>
     public const int End = 0xFF;
 }
+
+/// <summary>A piece of water the compound carries outside its tile height field.</summary>
+/// <param name="PlacementId">The <see cref="CompoundPlacement.Id"/> it came in with, or zero.</param>
+/// <param name="Material">An index into PhiveConfig's material collection: water, hot water, ice water, sand and so on.</param>
+/// <param name="Hash">The Banc hash of the actor it belongs to, or zero.</param>
+/// <param name="Parameters">Four more floats for a cylinder or a quadrant, none for a box.</param>
+public sealed record CompoundWater(
+    int PlacementId, Vector3 Scale, Vector3 Rotate, Vector3 Translate, int Material, ulong Hash, float[] Parameters)
+{
+    public string? MaterialName => Material >= 0 && Material < PhiveMaterial.MaterialNames.Count ? PhiveMaterial.MaterialNames[Material] : null;
+
+    /// <summary>A cylinder the game makes a whirlpool of: its third parameter is set.</summary>
+    public bool IsWhirlpool => Parameters is [_, _, not 0f, _];
+
+    /// <summary>A cylinder the game makes a quicksand pit of: no third parameter, and a second below zero.</summary>
+    public bool IsQuicksand => Parameters is [_, < 0f, 0f, _];
+}
+
+/// <summary>An external mesh's placement, and the section that holds it.</summary>
+public readonly record struct CompoundExternalMesh(Vector3 Scale, Vector3 Rotate, Vector3 Translate, int Section);
 
 /// <summary>
 /// A transform the compound was built under, with the hash of the actor it belongs to.
@@ -126,20 +160,23 @@ public sealed class CompoundPlacement
     /// <summary>Rotation in radians about each axis, the same three floats Banc stores.</summary>
     public Vector3 Rotate { get; set; }
 
-    /// <summary>
-    /// An identifier for the placement; 0xFFFF in an unused slot. Its low half is what the groups and
-    /// actors placed with it carry; the high half, 0 to 5, is not decoded.
-    /// </summary>
-    public uint Id { get; set; } = Empty;
+    /// <summary>An identifier for the placement, which its groups, actors and water carry; 0xFFFF in an unused slot.</summary>
+    public int Id { get; set; } = Empty;
 
-    /// <summary>The four bytes after the id, always zero in the shipped files.</summary>
-    public uint Reserved { get; set; }
+    /// <summary>How many of <see cref="StaticCompoundBody.WaterBoxes"/> came in with this placement.</summary>
+    public int WaterBoxCount { get; set; }
+
+    /// <summary>How many of <see cref="StaticCompoundBody.WaterQuadrants"/> came in with this placement.</summary>
+    public int WaterQuadrantCount { get; set; }
+
+    /// <summary>How many of <see cref="StaticCompoundBody.WaterCylinders"/> came in with this placement.</summary>
+    public int WaterCylinderCount { get; set; }
 
     /// <summary>The Banc hash of the actor this compound was placed as, or zero.</summary>
     public ulong Hash { get; set; }
 
     /// <summary>The id an unused slot carries.</summary>
-    public const uint Empty = 0xFFFF;
+    public const int Empty = 0xFFFF;
 
     public bool IsUsed => Hash != 0;
 }
@@ -154,13 +191,14 @@ public sealed class CompoundPlacement
 /// followed:
 ///
 /// <list type="bullet">
-/// <item>section 0, a fixed 19,120 byte block: the entity and sensor groups, the counts, the placements, and the name;</item>
+/// <item>section 0, a fixed 19,120 byte block: the entity and sensor groups, the counts, the placements, the name, and how much water and how many external meshes follow the shapes;</item>
 /// <item>section 1, the actor table;</item>
 /// <item>sections 2 and 3, the hash map over it, which are rebuilt on write;</item>
 /// <item>section 4, the body table;</item>
 /// <item>sections 5 and 6, each body's material palette (<see cref="MaterialsOf"/>);</item>
 /// <item>sections 7 to 10, a field tile's water (<see cref="Water"/>);</item>
-/// <item>sections 11 and up, the shapes: Havok tagfiles and nested containers.</item>
+/// <item>sections 11 and up, one shape per group, as Havok tagfiles;</item>
+/// <item>after them, a section each of box, cylinder and quadrant water that there is any of, then a table of external meshes and a nested container for each.</item>
 /// </list>
 ///
 /// Everything not modelled is kept as bytes and written back untouched, so a file that is read
@@ -180,9 +218,11 @@ public sealed class StaticCompoundBody
     private const int PlacementSize = 0x28;
     private const int PlacementCapacity = 64;
     private const int NameOffset = PlacementsOffset + PlacementCapacity * PlacementSize;  // 0x4A20
-    private const int NameSize = 0x60;
-    private const int TrailerOffset = NameOffset + NameSize;    // 0x4A80
-    private const int TrailerSize = InfoSectionSize - TrailerOffset;
+    private const int NameSize = 0x80;
+    private const int ExtraCountsOffset = NameOffset + NameSize; // 0x4AA0
+    private const int WaterBoxSize = 0x48;
+    private const int WaterSize = 0x58;
+    private const int ExternalMeshSize = 0x30;
     private const int ActorSize = 32;
     private const int BodySize = 20;
 
@@ -248,8 +288,17 @@ public sealed class StaticCompoundBody
     /// <summary>The second copy of <see cref="PropertyCount"/>, which the header also carries.</summary>
     public int PropertyCount2 { get; set; }
 
-    /// <summary>The forty eight bytes at the end of section 0: small numbers in the last four words; not decoded.</summary>
-    public byte[] Trailer { get; set; } = new byte[TrailerSize];
+    /// <summary>How many records the box water section holds; see <see cref="WaterBoxes"/>.</summary>
+    public int WaterBoxCount { get; set; }
+
+    /// <summary>How many records the cylinder water section holds; see <see cref="WaterCylinders"/>.</summary>
+    public int WaterCylinderCount { get; set; }
+
+    /// <summary>How many records the quadrant water section holds; see <see cref="WaterQuadrants"/>.</summary>
+    public int WaterQuadrantCount { get; set; }
+
+    /// <summary>How many external meshes follow the water; see <see cref="ExternalMeshes"/>.</summary>
+    public int ExternalMeshCount { get; set; }
 
     private StaticCompoundBody(PhiveFile container) => Container = container;
 
@@ -293,15 +342,20 @@ public sealed class StaticCompoundBody
             {
                 Translate = ReadVector3(entry),
                 Rotate = ReadVector3(entry[12..]),
-                Id = BinaryPrimitives.ReadUInt32LittleEndian(entry[24..]),
-                Reserved = BinaryPrimitives.ReadUInt32LittleEndian(entry[28..]),
+                Id = BinaryPrimitives.ReadUInt16LittleEndian(entry[24..]),
+                WaterBoxCount = BinaryPrimitives.ReadUInt16LittleEndian(entry[26..]),
+                WaterQuadrantCount = BinaryPrimitives.ReadUInt16LittleEndian(entry[28..]),
+                WaterCylinderCount = BinaryPrimitives.ReadUInt16LittleEndian(entry[30..]),
                 Hash = BinaryPrimitives.ReadUInt64LittleEndian(entry[32..]),
             });
         }
 
         int nul = info.Slice(NameOffset, NameSize).IndexOf((byte)0);
         compound.Name = Encoding.UTF8.GetString(info.Slice(NameOffset, nul < 0 ? NameSize : nul));
-        compound.Trailer = info.Slice(TrailerOffset, TrailerSize).ToArray();
+        compound.WaterBoxCount = BinaryPrimitives.ReadInt32LittleEndian(info[ExtraCountsOffset..]);
+        compound.WaterCylinderCount = BinaryPrimitives.ReadInt32LittleEndian(info[(ExtraCountsOffset + 4)..]);
+        compound.WaterQuadrantCount = BinaryPrimitives.ReadInt32LittleEndian(info[(ExtraCountsOffset + 8)..]);
+        compound.ExternalMeshCount = BinaryPrimitives.ReadInt32LittleEndian(info[(ExtraCountsOffset + 12)..]);
 
         ReadOnlySpan<byte> actorTable = container[ActorSection];
         if (actorTable.Length < actors * ActorSize)
@@ -377,6 +431,63 @@ public sealed class StaticCompoundBody
 
     /// <summary>The tile's water, from sections 7 to 10, or null for a compound that carries none.</summary>
     public PhiveWater? Water => PhiveWater.FromContainer(Container);
+
+    /// <summary>The first section after the groups' shapes, where the water and external meshes start, in that order.</summary>
+    private int ExtraSection => FirstShapeSection + TagsA.Count + TagsB.Count;
+
+    /// <summary>Water the game makes a height field box of.</summary>
+    public IReadOnlyList<CompoundWater> WaterBoxes => ReadWater(ExtraSection, WaterBoxCount, WaterBoxSize);
+
+    /// <summary>Cylinders of water or sand, which the game makes whirlpools and quicksand pits of.</summary>
+    public IReadOnlyList<CompoundWater> WaterCylinders =>
+        ReadWater(ExtraSection + (WaterBoxCount > 0 ? 1 : 0), WaterCylinderCount, WaterSize);
+
+    /// <summary>Water the game makes a height field box, a height field quadrant and a box of - and one box more for lava.</summary>
+    public IReadOnlyList<CompoundWater> WaterQuadrants =>
+        ReadWater(ExtraSection + (WaterBoxCount > 0 ? 1 : 0) + (WaterCylinderCount > 0 ? 1 : 0), WaterQuadrantCount, WaterSize);
+
+    /// <summary>
+    /// Meshes kept outside the compound's own shapes, each a nested <c>.bphsh</c> the game names
+    /// <c>&lt;compound&gt;_ExternalMesh_&lt;n&gt;</c>. Every field tile has one: its ground.
+    /// </summary>
+    public IReadOnlyList<CompoundExternalMesh> ExternalMeshes
+    {
+        get
+        {
+            if (ExternalMeshCount <= 0) return [];
+            int table = ExtraSection + (WaterBoxCount > 0 ? 1 : 0) + (WaterCylinderCount > 0 ? 1 : 0) + (WaterQuadrantCount > 0 ? 1 : 0);
+            ReadOnlySpan<byte> data = Container[table];
+            List<CompoundExternalMesh> meshes = [];
+            for (int i = 0; i < ExternalMeshCount && (i + 1) * ExternalMeshSize <= data.Length; i++)
+            {
+                ReadOnlySpan<byte> entry = data.Slice(i * ExternalMeshSize, ExternalMeshSize);
+                meshes.Add(new CompoundExternalMesh(ReadVector3(entry), ReadVector3(entry[12..]), ReadVector3(entry[24..]), table + 1 + i));
+            }
+            return meshes;
+        }
+    }
+
+    private List<CompoundWater> ReadWater(int section, int count, int size)
+    {
+        if (count <= 0) return [];
+        ReadOnlySpan<byte> data = Container[section];
+        List<CompoundWater> water = [];
+        for (int i = 0; i < count && (i + 1) * size <= data.Length; i++)
+        {
+            ReadOnlySpan<byte> entry = data.Slice(i * size, size);
+            float[] parameters = new float[(size - WaterBoxSize) / 4];
+            for (int k = 0; k < parameters.Length; k++) parameters[k] = BinaryPrimitives.ReadSingleLittleEndian(entry[(WaterBoxSize + k * 4)..]);
+            water.Add(new CompoundWater(
+                BinaryPrimitives.ReadUInt16LittleEndian(entry),
+                ReadVector3(entry[12..]),
+                ReadVector3(entry[24..]),
+                ReadVector3(entry[36..]),
+                BinaryPrimitives.ReadInt32LittleEndian(entry[48..]),
+                BinaryPrimitives.ReadUInt64LittleEndian(entry[56..]),
+                parameters));
+        }
+        return water;
+    }
 
     /// <summary>
     /// A body's material palette, from the property tables in sections 5 and 6. The mesh shape the
@@ -477,8 +588,10 @@ public sealed class StaticCompoundBody
             Span<byte> entry = span.Slice(PlacementsOffset + i * PlacementSize, PlacementSize);
             WriteVector3(entry, placement.Translate);
             WriteVector3(entry[12..], placement.Rotate);
-            BinaryPrimitives.WriteUInt32LittleEndian(entry[24..], placement.Id);
-            BinaryPrimitives.WriteUInt32LittleEndian(entry[28..], placement.Reserved);
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[24..], (ushort)placement.Id);
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[26..], (ushort)placement.WaterBoxCount);
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[28..], (ushort)placement.WaterQuadrantCount);
+            BinaryPrimitives.WriteUInt16LittleEndian(entry[30..], (ushort)placement.WaterCylinderCount);
             BinaryPrimitives.WriteUInt64LittleEndian(entry[32..], placement.Hash);
         }
 
@@ -487,7 +600,10 @@ public sealed class StaticCompoundBody
             throw new InvalidOperationException($"The name is {name.Length} bytes; the field holds {NameSize - 1}.");
         name.CopyTo(span[NameOffset..]);
 
-        Trailer.AsSpan(0, Math.Min(Trailer.Length, TrailerSize)).CopyTo(span[TrailerOffset..]);
+        BinaryPrimitives.WriteInt32LittleEndian(span[ExtraCountsOffset..], WaterBoxCount);
+        BinaryPrimitives.WriteInt32LittleEndian(span[(ExtraCountsOffset + 4)..], WaterCylinderCount);
+        BinaryPrimitives.WriteInt32LittleEndian(span[(ExtraCountsOffset + 8)..], WaterQuadrantCount);
+        BinaryPrimitives.WriteInt32LittleEndian(span[(ExtraCountsOffset + 12)..], ExternalMeshCount);
         return info;
     }
 
@@ -522,7 +638,7 @@ public sealed class StaticCompoundBody
             BinaryPrimitives.WriteUInt32LittleEndian(entry, body.Index);
             BinaryPrimitives.WriteUInt32LittleEndian(entry[4..], body.Info);
             BinaryPrimitives.WriteUInt32LittleEndian(entry[8..],
-                (uint)(body.ActorIndex & 0xFFFF) | ((uint)body.Slot << 16));
+                (uint)(body.ActorIndex & 0xFFFF) | ((uint)body.Instance << 16));
             BinaryPrimitives.WriteUInt32LittleEndian(entry[12..], (uint)body.FirstProperty);
             BinaryPrimitives.WriteUInt32LittleEndian(entry[16..], (uint)body.PropertyCount);
         }

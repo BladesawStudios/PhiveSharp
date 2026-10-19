@@ -79,19 +79,31 @@ body; the ones that do not span two or three. An actor with `-1` for both has no
 this compound at all, which is most of them.
 
 **Section 0 is the same 19,120 bytes in every file**, arrays at capacity whether used or not: two
-four byte tables at the front, the counts, sixty four placement slots, and the name. A field tile
-leaves every placement empty. What fills one is a compound baked somewhere other than where it is
-used — a well, a sky island, a merged set — where the transform says where the whole compound
-sits and the hash names the actor that placed it.
+four byte tables at the front, the counts, sixty four placement slots, the name, and four counts
+of what follows the shapes. A field tile leaves every placement empty. What fills one is a compound
+baked somewhere other than where it is used — a well, a sky island, a merged set — where the
+transform says where the whole compound sits, the hash names the actor that placed it, and three
+counts say how much of the compound's water came with it.
 
 **The game makes one rigid body per layer, not per actor.** The two tables at the front of section 0
 are the compound's groups: a layer and a placement slot each, entities in the first and sensors in
 the second, ending at a layer of `0xFF`. Each becomes a rigid body named
 `<compound>_Entity_<layer>_<slot>`, whose shape is the shape section in the same position, entity
-groups first; a field tile's ground mesh is one section more. A body's `Info` word says which group
-it is in - entity or sensor, layer, sub layer - and an actor placed with a sub-compound carries that
-placement's id and slot in what was its reserved space. `EntityGroups`, `SensorGroups` and the
-properties on `CompoundBody` and `CompoundActor` unpack them.
+groups first, and each body is the instance of that shape its entry names. A body's `Info` word says
+which group it is in - entity or sensor, layer, sub layer - and an actor placed with a sub-compound
+carries that placement's id and slot in what was its reserved space. `EntityGroups`, `SensorGroups`
+and the properties on `CompoundBody` and `CompoundActor` unpack them.
+
+**An actor's collision comes and goes with it, by degrees.** The game switches a body's instance on
+and off with a level - live, held by a static compound controller, disabled or taken over, removed -
+and the last byte of `Info` (`Persistence`) says how far down that list the body stays. An actor can
+also be marked to start with its bodies off (`StartsDisabled`) until it turns them on itself.
+
+**After the shapes come more water and the ground.** Water outside the tile's height field -
+quicksand pits and whirlpools among it - is records rather than shapes: a section of boxes, one of cylinders and one of quadrants, each record
+a transform, a material and the hash of the actor it belongs to (`WaterBoxes`, `WaterCylinders`,
+`WaterQuadrants`). Then a table of external meshes and a nested `.bphsh` for each - every field tile
+has exactly one, its ground (`ExternalMeshes`).
 
 **Field tiles carry half a megabyte of water** in sections 7 to 10: the height field the game
 builds each tile's `_TeraWater` body from. Section 7 says how big the tile is and where, and how big
@@ -119,8 +131,8 @@ sections 1 and 2 (`PhiveShape`). Materials, sub materials, flags and the layers 
 named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still only carried:
 
 - the six bits of a navmesh face between its user tags and its material;
-- a body's last `Info` byte, an actor's one flag byte, and the high half of a placement's id;
-- the small numbers at the end of section 0.
+- what a water cylinder's or quadrant's four parameters mean beyond telling quicksand from a
+  whirlpool, and a second hash a few water records carry.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item

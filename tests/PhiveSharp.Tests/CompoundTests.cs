@@ -18,6 +18,76 @@ public class CompoundTests
         CompoundBody sensor = new(0, 0x00001C01, 0, 0, 0, 0);
         Assert.True(sensor.IsSensor);
         Assert.Equal("ForbidAutoPlacementArea", sensor.LayerName);
+
+        Assert.Equal(2, new CompoundBody(0, 0x02000800, 0, 0, 0, 0).Persistence);
+        CompoundActor actor = new();
+        actor.StartsDisabled = true;
+        Assert.Equal(1, actor.Reserved[7]);
+    }
+
+    [TotkCorpusFact]
+    public void EachBodyIsItsInstanceInItsGroupsShape()
+    {
+        Problems problems = new();
+        long checkedBodies = 0;
+        Corpus.ForEachFile((name, _, data) =>
+        {
+            StaticCompoundBody c = StaticCompoundBody.FromBinary(data);
+            var groups = c.EntityGroups.Select(g => (g.Layer, g.Slot, Sensor: false)).Concat(c.SensorGroups.Select(g => (g.Layer, g.Slot, Sensor: true))).ToList();
+            for (int k = 0; k < groups.Count; k++)
+            {
+                if (c.GetShape(StaticCompoundBody.FirstShapeSection + k)?.RootObject is not { TypeName: "hknpCompoundShape" } root) continue;
+                List<TagObject> instances = [.. root.GetObject("instances").GetArray("elements").Elements];
+                for (int i = 0; i < c.Bodies.Count; i++)
+                {
+                    CompoundBody b = c.Bodies[i];
+                    if (b.Layer != groups[k].Layer || b.IsSensor != groups[k].Sensor || c.Actors[b.ActorIndex].PlacementSlot != groups[k].Slot) continue;
+                    Interlocked.Increment(ref checkedBodies);
+                    if (b.Instance >= instances.Count || instances[b.Instance].GetInt64("shapeTag") != i)
+                        problems.Add($"{name}: body {i} is not instance {b.Instance} of section {StaticCompoundBody.FirstShapeSection + k}");
+                }
+            }
+        }, ".bphsc");
+
+        problems.AssertNone();
+        Assert.True(checkedBodies > 400000, $"only {checkedBodies} bodies checked");
+    }
+
+    [TotkCorpusFact]
+    public void WaterAndExternalMeshesAddUp()
+    {
+        Problems problems = new();
+        int tiles = 0, quicksand = 0, whirlpools = 0;
+        Corpus.ForEachFile((name, _, data) =>
+        {
+            StaticCompoundBody c = StaticCompoundBody.FromBinary(data);
+            if (c.Placements.Sum(p => p.WaterBoxCount) != c.WaterBoxCount ||
+                c.Placements.Sum(p => p.WaterCylinderCount) != c.WaterCylinderCount ||
+                c.Placements.Sum(p => p.WaterQuadrantCount) != c.WaterQuadrantCount)
+                problems.Add($"{name}: placements' water counts do not add up to the header's");
+            if (c.WaterBoxes.Count != c.WaterBoxCount || c.WaterCylinders.Count != c.WaterCylinderCount || c.WaterQuadrants.Count != c.WaterQuadrantCount)
+                problems.Add($"{name}: a water section is short");
+            foreach (CompoundWater w in c.WaterBoxes.Concat(c.WaterCylinders).Concat(c.WaterQuadrants))
+                if (w.MaterialName is null) problems.Add($"{name}: water material {w.Material}");
+            foreach (CompoundWater w in c.WaterCylinders)
+            {
+                if (w.IsQuicksand) { Interlocked.Increment(ref quicksand); if (w.MaterialName != "Sand") problems.Add($"{name}: quicksand of {w.MaterialName}"); }
+                if (w.IsWhirlpool) Interlocked.Increment(ref whirlpools);
+            }
+            var meshes = c.ExternalMeshes;
+            if (meshes.Count != c.ExternalMeshCount) problems.Add($"{name}: {meshes.Count} of {c.ExternalMeshCount} external meshes");
+            foreach (CompoundExternalMesh m in meshes)
+                if (c.GetShape(m.Section)?.RootObject?.TypeName != "hknpMeshShape") problems.Add($"{name}: external mesh in section {m.Section} is not a mesh");
+            if (Path.GetFileName(name).StartsWith("MainField_") || Path.GetFileName(name).StartsWith("MinusField_"))
+            {
+                if (meshes.Count != 1) problems.Add($"{name}: field tile with {meshes.Count} external meshes");
+                else Interlocked.Increment(ref tiles);
+            }
+        }, ".bphsc");
+
+        problems.AssertNone();
+        Assert.True(tiles > 2500, $"only {tiles} field tiles");
+        Assert.True(quicksand > 0 && whirlpools > 0, $"{quicksand} quicksand pits, {whirlpools} whirlpools");
     }
 
     [TotkCorpusFact]
@@ -87,10 +157,10 @@ public class CompoundTests
             {
                 Interlocked.Increment(ref placed);
                 CompoundPlacement p = c.Placements[a.PlacementSlot];
-                if (!p.IsUsed || (p.Id & 0xFFFF) != a.PlacementId) problems.Add($"{name}: actor {a.Hash:X16} names placement {a.PlacementId:X}/{a.PlacementSlot}");
+                if (!p.IsUsed || p.Id != a.PlacementId) problems.Add($"{name}: actor {a.Hash:X16} names placement {a.PlacementId:X}/{a.PlacementSlot}");
             }
             foreach (CompoundGroup g in c.EntityGroups.Concat(c.SensorGroups).Where(g => g.Slot != 0))
-                if ((c.Placements[g.Slot].Id & 0xFFFF) != g.PlacementId) problems.Add($"{name}: group names placement {g.PlacementId:X}/{g.Slot}");
+                if (c.Placements[g.Slot].Id != g.PlacementId) problems.Add($"{name}: group names placement {g.PlacementId:X}/{g.Slot}");
         }, ".bphsc");
 
         problems.AssertNone();
