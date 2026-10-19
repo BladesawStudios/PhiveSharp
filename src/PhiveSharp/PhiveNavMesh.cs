@@ -89,10 +89,7 @@ public readonly record struct PhiveNavFace(int Value)
     /// <summary>An index into <see cref="PhiveNavMesh.LinkedActors"/>, or -1 for none; stored one higher.</summary>
     public int LinkedActor => (Value & 0xFFFF) - 1;
 
-    /// <summary>
-    /// Four bits, the same count as PhiveConfig's <c>NavMeshUserTagCollection</c>, which
-    /// <see cref="UserTagNames"/> takes them to be in order; that order is not confirmed.
-    /// </summary>
+    /// <summary>PhiveConfig's <c>NavMeshUserTagCollection</c>, one bit each in its order.</summary>
     public int UserTags => (Value >> 16) & 0xF;
 
     public IEnumerable<string> UserTagNames

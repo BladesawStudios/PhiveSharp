@@ -76,4 +76,27 @@ public class NavMeshTests
         problems.AssertNone();
         Assert.True(linked > 100000, $"only {linked} faces link an actor");
     }
+
+    [TotkCorpusFact]
+    public void RoadsAreOnTheSurfaceAndNotInTheDepths()
+    {
+        long surface = 0, depths = 0;
+        Corpus.ForEachFile((name, _, data) =>
+        {
+            if (!name.Contains("StitchedNavMesh")) return;
+            if (PhiveNavMesh.FromBinary(data).GetNavMesh().RootObject is not { } root) return;
+            foreach (TagObject variant in root.GetArray("namedVariants").Elements)
+            {
+                if (variant.GetPointer("variant") is not { TypeName: "hkaiNavMesh" } nav) continue;
+                TagArray faceData = nav.GetArray("faceData");
+                long roads = 0;
+                for (int i = 0; i < faceData.Count; i++)
+                    if (new PhiveNavFace((int)faceData.GetInt64(i)).UserTagNames.Contains("Road")) roads++;
+                Interlocked.Add(ref name.Contains("MinusField") ? ref depths : ref surface, roads);
+            }
+        }, ".bphnm");
+
+        Assert.Equal(0, depths);
+        Assert.True(surface > 10000, $"only {surface} road faces on the surface");
+    }
 }

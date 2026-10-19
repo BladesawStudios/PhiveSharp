@@ -106,8 +106,9 @@ sludge around Zora's Domain.
 is its section UID - `x * 32 + z` across a field's grid of tiles, plus 1280 in the Depths, the same
 number its streaming sets join to their neighbours - and a 3 by 4 transform. Section 2 is the Banc
 hashes of placed actors, and each face's `faceData` packs a one-based index into them in its low
-sixteen bits with a navmesh material in its top five: miasma faces name miasma actors, sage walls name
-their sage wall, and the game enables and disables those faces as their actors come and go.
+sixteen bits, PhiveConfig's four user tags in the next four, and a navmesh material in its top five:
+miasma faces name miasma actors, sage walls name their sage wall, and the game enables and disables
+those faces as their actors come and go. The `Road` tag traces Hyrule's roads.
 `PhiveNavMesh` and `PhiveNavFace` read them.
 
 ## What this does not model
@@ -117,8 +118,7 @@ A body's run of entries in the property tables in sections 5 and 6 reads as its 
 sections 1 and 2 (`PhiveShape`). Materials, sub materials, flags and the layers a filter hits are
 named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still only carried:
 
-- a navmesh face's four bits after its actor index, taken to be PhiveConfig's four user tags in
-  order, which is not confirmed, and the six bits above them;
+- the six bits of a navmesh face between its user tags and its material;
 - a body's last `Info` byte, an actor's one flag byte, and the high half of a placement's id;
 - the small numbers at the end of section 0.
 
