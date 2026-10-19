@@ -112,14 +112,15 @@ their sage wall, and the game enables and disables those faces as their actors c
 
 ## What this does not model
 
-A body's run of entries in the property
-tables in sections 5 and 6 reads as its material palette (`MaterialsOf`), the same sixteen byte
-material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`). Materials,
-sub materials, flags and the layers a filter hits are named from `Phive/Config/PhiveConfig.byml`'s own
-tables. A navmesh face's four bits after its actor index are taken to be PhiveConfig's four user tags
-in order, which is not confirmed, and the six above them are not decoded. Nor are a body's last `Info`
-byte, an actor's one flag byte, the high half of a placement's id, or the small numbers at the end of
-section 0.
+A body's run of entries in the property tables in sections 5 and 6 reads as its material palette
+(`MaterialsOf`), the same sixteen byte material and eight byte filter entries a shape keeps in its
+sections 1 and 2 (`PhiveShape`). Materials, sub materials, flags and the layers a filter hits are
+named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still only carried:
+
+- a navmesh face's four bits after its actor index, taken to be PhiveConfig's four user tags in
+  order, which is not confirmed, and the six bits above them;
+- a body's last `Info` byte, an actor's one flag byte, and the high half of a placement's id;
+- the small numbers at the end of section 0.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item
