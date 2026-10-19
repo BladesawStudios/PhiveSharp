@@ -326,6 +326,9 @@ public sealed class StaticCompoundBody
         for (int i = actor.FirstBody; i <= actor.LastBody && i < Bodies.Count; i++) yield return Bodies[i];
     }
 
+    /// <summary>The tile's water, from sections 7 to 10, or null for a compound that carries none.</summary>
+    public PhiveWater? Water => PhiveWater.FromContainer(Container);
+
     /// <summary>
     /// A body's material palette, from the property tables in sections 5 and 6. The mesh shape the
     /// body is an instance of tags its primitives with indices into this.

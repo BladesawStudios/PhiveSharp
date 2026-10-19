@@ -105,7 +105,8 @@ public readonly record struct PhiveMaterial(int Material, int SubMaterial, ulong
 
     internal static List<PhiveMaterial> Read(ReadOnlySpan<byte> entries, ReadOnlySpan<byte> filters, int first, int count)
     {
-        if (first < 0 || count < 0 || (first + count) * Size > entries.Length || (first + count) * FilterSize > filters.Length)
+        if (first < 0 || count < 0 || (first + count) * Size > entries.Length ||
+            !filters.IsEmpty && (first + count) * FilterSize > filters.Length)
             throw new InvalidDataException($"Materials {first}..{first + count} run past the palette.");
 
         List<PhiveMaterial> result = new(count);
@@ -114,7 +115,7 @@ public readonly record struct PhiveMaterial(int Material, int SubMaterial, ulong
                 BinaryPrimitives.ReadInt32LittleEndian(entries[(i * Size)..]),
                 BinaryPrimitives.ReadInt32LittleEndian(entries[(i * Size + 4)..]),
                 BinaryPrimitives.ReadUInt64LittleEndian(entries[(i * Size + 8)..]),
-                BinaryPrimitives.ReadUInt64LittleEndian(filters[(i * FilterSize)..])));
+                filters.IsEmpty ? 0 : BinaryPrimitives.ReadUInt64LittleEndian(filters[(i * FilterSize)..])));
         return result;
     }
 

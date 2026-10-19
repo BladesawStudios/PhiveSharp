@@ -84,9 +84,11 @@ leaves every placement empty. What fills one is a compound baked somewhere other
 used — a well, a sky island, a merged set — where the transform says where the whole compound
 sits and the hash names the actor that placed it.
 
-**Field tiles carry half a megabyte of terrain collision** in sections 8, 9 and 10, at exactly
-0x80000, 0x20000 and 0xC0 bytes. Nothing else has them, and this does not decode them: they are
-carried through as bytes.
+**Field tiles carry half a megabyte of water** in sections 7 to 10: the height field the game
+builds each tile's `_TeraWater` body from. Section 7 says how big the tile is and where, and how big
+the grid is; section 8 is a surface, a flow and a fluid per sample on a 256 by 256 grid; section 9 is
+a second height per sample; section 10 is the twelve fluids a sample can be. `Water` reads them. The
+fluids land where they should - lava around Eldin, quicksand in Gerudo, sludge around Zora's Domain.
 
 ## What this does not model
 
@@ -94,7 +96,8 @@ Sections 5 to 10 of a static compound are kept as bytes. A body's run of entries
 tables in sections 5 and 6 reads as its material palette (`MaterialsOf`), the same sixteen byte
 material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`). Materials,
 sub materials, flags and the layers a filter hits are named from `Phive/Config/PhiveConfig.byml`'s own
-tables. The terrain collision is not decoded.
+tables. In the water, what section 9 holds and the low byte of a sample's fluid are not known; they
+are given as read.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item
