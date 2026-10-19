@@ -93,13 +93,22 @@ the low byte of its fluid is 0x80 or more, the only part of that byte anything i
 `Water` reads them. The fluids land where they should - lava around Eldin, quicksand in Gerudo,
 sludge around Zora's Domain.
 
+**A navmesh's faces can be switched off by the actors standing on them.** Section 1 of a `.bphnm`
+is its section UID - `x * 32 + z` across a field's grid of tiles, plus 1280 in the Depths, the same
+number its streaming sets join to their neighbours - and a 3 by 4 transform. Section 2 is the Banc
+hashes of placed actors, and each face's `faceData` packs a one-based index into them in its low
+sixteen bits with a navmesh material in its top five: miasma faces name miasma actors, sage walls name
+their sage wall, and the game enables and disables those faces as their actors come and go.
+`PhiveNavMesh` and `PhiveNavFace` read them.
+
 ## What this does not model
 
 Sections 5 to 10 of a static compound are kept as bytes. A body's run of entries in the property
 tables in sections 5 and 6 reads as its material palette (`MaterialsOf`), the same sixteen byte
 material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`). Materials,
 sub materials, flags and the layers a filter hits are named from `Phive/Config/PhiveConfig.byml`'s own
-tables.
+tables. A navmesh face's four bits after its actor index are taken to be PhiveConfig's four user tags
+in order, which is not confirmed, and the six above them are not decoded.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item

@@ -241,7 +241,7 @@ public readonly struct TagObject(TagFile file, int typeIndex, int offset)
         {
             TagTypeKind kind = (TagTypeKind)(file.ResolveFormat(field.TypeIndex) & 0xF);
             if (field.Name is "offset" && kind == TagTypeKind.Int) offsetField ??= field;
-            else if (field.Name is "size" or "numElements" && kind == TagTypeKind.Int) sizeField ??= field;
+            else if (field.Name is "size" or "numElements" or "m_size" && kind == TagTypeKind.Int) sizeField ??= field;
             else if (kind == TagTypeKind.Pointer) pointerField ??= field;
         }
 
@@ -253,14 +253,14 @@ public readonly struct TagObject(TagFile file, int typeIndex, int offset)
             return new TagArray(file, element, (int)(address + delta), (int)count, stride);
         }
 
-        if (pointerField is { } pointer && sizeField is { } pointerLength)
+        if (pointerField is { } pointer && sizeField is not null)
         {
+            // The data's own size is often left at zero; the item the pointer names holds the count.
             TagObject cursor = new(file, typeIndex, address);
             long item = cursor.ReadInteger(pointer.TypeIndex, address + pointer.Offset);
-            long count = cursor.ReadInteger(pointerLength.TypeIndex, address + pointerLength.Offset);
-
-            int start = item > 0 && item < file.Items.Count ? file.Items[(int)item].Offset : -1;
-            return new TagArray(file, element, start, (int)count, stride);
+            if (item <= 0 || item >= file.Items.Count) return new TagArray(file, element, -1, 0, stride);
+            TagItem target = file.Items[(int)item];
+            return new TagArray(file, element, target.Offset, target.Count, stride);
         }
 
         int inline = tupleSize > 0 ? tupleSize : stride > 0 ? file.ResolveByteSize(typeIndex) / stride : 0;
