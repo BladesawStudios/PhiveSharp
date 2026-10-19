@@ -117,10 +117,12 @@ sludge around Zora's Domain.
 **A navmesh's faces can be switched off by the actors standing on them.** Section 1 of a `.bphnm`
 is its section UID - `x * 32 + z` across a field's grid of tiles, plus 1280 in the Depths, the same
 number its streaming sets join to their neighbours - and a 3 by 4 transform. Section 2 is the Banc
-hashes of placed actors, and each face's `faceData` packs a one-based index into them in its low
-sixteen bits, PhiveConfig's four user tags in the next four, and a navmesh material in its top five:
-miasma faces name miasma actors, sage walls name their sage wall, and the game enables and disables
-those faces as their actors come and go. The `Road` tag traces Hyrule's roads.
+hashes of placed actors, and each face's `faceData` packs an index into them in its low sixteen bits,
+PhiveConfig's four user tags in the next four, and a navmesh material in its top five. Bit 23 says the
+index is real, and the game's A* edge filter then lets a face through only while its actor's switch
+is on - or, with bit 22, only while it is off: miasma faces name miasma actors, sage walls name their
+sage wall, and the plain ground under them names the same actor the other way round. The `Road` tag
+traces Hyrule's roads.
 `PhiveNavMesh` and `PhiveNavFace` read them.
 
 ## What this does not model
@@ -130,8 +132,7 @@ A body's run of entries in the property tables in sections 5 and 6 reads as its 
 sections 1 and 2 (`PhiveShape`). Materials, sub materials, flags and the layers a filter hits are
 named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still only carried:
 
-- the six bits of a navmesh face between its user tags and its material - of which only three are
-  ever set, one of them on every face that links an actor;
+- bit 24 of a navmesh face, set on a few thousand, which the game's pathfinding filters do not read;
 - the two values a water cylinder's shape keeps, a number each water record passes to its shape,
   and a second hash a few of them carry.
 

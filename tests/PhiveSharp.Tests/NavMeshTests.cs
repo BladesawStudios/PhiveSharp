@@ -9,7 +9,11 @@ public class NavMeshTests
     {
         PhiveNavFace face = new(unchecked((int)0x3C820005));
 
-        Assert.Equal(4, face.LinkedActor);
+        Assert.Equal(5, face.LinkedActor);
+        Assert.False(face.UsableWhileActorOff);
+        Assert.Equal(0, new PhiveNavFace(unchecked((int)0x00C00000)).LinkedActor);
+        Assert.True(new PhiveNavFace(unchecked((int)0x00C00000)).UsableWhileActorOff);
+        Assert.Equal(-1, new PhiveNavFace(unchecked((int)0x02800003)).LinkedActor);
         Assert.Equal("Miasma", face.MaterialName);
         Assert.Equal(["TraversableWhenDisableExtraData"], face.UserTagNames);
         Assert.Equal(-1, new PhiveNavFace(0x54000000).LinkedActor);
@@ -69,6 +73,7 @@ public class NavMeshTests
                     if (face.MaterialName is null) problems.Add($"{name}: face {i} material {face.Material}");
                     if (face.LinkedActor >= mesh.LinkedActors.Count) problems.Add($"{name}: face {i} links actor {face.LinkedActor} of {mesh.LinkedActors.Count}");
                     if (face.LinkedActor >= 0) Interlocked.Increment(ref linked);
+                    else if ((face.Value & 0xFFFF) != 0) problems.Add($"{name}: face {i} has an actor index but no link");
                 }
             }
         }, ".bphnm");

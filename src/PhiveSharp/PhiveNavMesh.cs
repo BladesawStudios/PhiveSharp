@@ -86,8 +86,17 @@ public sealed class PhiveNavMesh
 /// </summary>
 public readonly record struct PhiveNavFace(int Value)
 {
-    /// <summary>An index into <see cref="PhiveNavMesh.LinkedActors"/>, or -1 for none; stored one higher.</summary>
-    public int LinkedActor => (Value & 0xFFFF) - 1;
+    /// <summary>
+    /// An index into <see cref="PhiveNavMesh.LinkedActors"/>, or -1 for none. The game takes the low
+    /// sixteen bits as the index when bit 23 is set and bit 25 is not.
+    /// </summary>
+    public int LinkedActor => (Value & 0x2800000) == 0x800000 ? Value & 0xFFFF : -1;
+
+    /// <summary>
+    /// The face is usable while its linked actor is switched off rather than on. Bit 22, set mostly on
+    /// plain faces linked to the same actors as miasma and tar faces.
+    /// </summary>
+    public bool UsableWhileActorOff => (Value & 0x400000) != 0;
 
     /// <summary>PhiveConfig's <c>NavMeshUserTagCollection</c>, one bit each in its order.</summary>
     public int UserTags => (Value >> 16) & 0xF;
@@ -102,11 +111,10 @@ public readonly record struct PhiveNavFace(int Value)
     }
 
     /// <summary>
-    /// Bits 20 to 25, not decoded. Only 22, 23 and 24 are ever set: 23 on every face with a
-    /// <see cref="LinkedActor"/> and a few thousand without, 22 almost only on linked faces, 24 almost
-    /// only on unlinked ones.
+    /// Bits 20, 21 and 24, which the game's A* edge filter and cost modifier do not read; only 24 is ever set, almost
+    /// always on faces without a linked actor.
     /// </summary>
-    public int Unknown => (Value >> 20) & 0x3F;
+    public int Unknown => (Value >> 20) & 0x13;
 
     /// <summary>The face's navmesh material, by PhiveConfig's <c>NavMeshMaterialCollection</c>.</summary>
     public int Material => (int)((uint)Value >> 26) & 0x1F;
