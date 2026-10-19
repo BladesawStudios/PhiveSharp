@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Text;
-using PhiveSharp.Havok;
+using HkxSharp;
 
 namespace PhiveSharp;
 
@@ -529,7 +529,7 @@ public sealed class StaticCompoundBody
             for (int i = FirstShapeSection; i < Container.Sections.Count; i++)
             {
                 ReadOnlySpan<byte> section = Container[i];
-                if (section.Length > 0 && (TagFile.IsTagFile(section) || PhiveFile.IsPhive(section))) yield return i;
+                if (section.Length > 0 && (HkTagfile.IsTagfile(section) || PhiveFile.IsPhive(section))) yield return i;
             }
         }
     }
@@ -541,16 +541,16 @@ public sealed class StaticCompoundBody
     /// A compound shape sits in its section as a bare tagfile. A mesh shape is wrapped in a
     /// version 1 container first, and its tagfile is that container's section 0.
     /// </remarks>
-    public TagFile? GetShape(int section)
+    public HkTagfile? GetShape(int section)
     {
         ReadOnlySpan<byte> data = Container[section];
-        if (TagFile.IsTagFile(data)) return TagFile.FromBinary(data);
+        if (HkTagfile.IsTagfile(data)) return HkTagfile.FromBinary(data);
 
         if (PhiveFile.IsPhive(data))
         {
             PhiveFile nested = PhiveFile.FromBinary(data);
             foreach (byte[] inner in nested.Sections)
-                if (TagFile.IsTagFile(inner)) return TagFile.FromBinary(inner);
+                if (HkTagfile.IsTagfile(inner)) return HkTagfile.FromBinary(inner);
         }
 
         return null;
@@ -558,13 +558,13 @@ public sealed class StaticCompoundBody
 
     /// <summary>Puts an edited shape back in the section it came from.</summary>
     /// <exception cref="InvalidOperationException">The section holds no shape.</exception>
-    public void SetShape(int section, TagFile shape)
+    public void SetShape(int section, HkTagfile shape)
     {
         ReadOnlySpan<byte> data = Container[section];
 
-        if (TagFile.IsTagFile(data))
+        if (HkTagfile.IsTagfile(data))
         {
-            Container.SetSection(section, Padded(shape.ToBinary()));
+            Container.SetSection(section, Padded(HkTagfileWriter.Write(shape)));
             return;
         }
 
@@ -573,8 +573,8 @@ public sealed class StaticCompoundBody
             PhiveFile nested = PhiveFile.FromBinary(data);
             for (int i = 0; i < nested.Sections.Count; i++)
             {
-                if (!TagFile.IsTagFile(nested.Sections[i])) continue;
-                nested.SetSection(i, Padded(shape.ToBinary()));
+                if (!HkTagfile.IsTagfile(nested.Sections[i])) continue;
+                nested.SetSection(i, Padded(HkTagfileWriter.Write(shape)));
                 Container.SetSection(section, nested.ToBinary());
                 return;
             }

@@ -1,4 +1,4 @@
-using PhiveSharp.Havok;
+using HkxSharp;
 
 namespace PhiveSharp.Tests;
 
@@ -36,14 +36,14 @@ public class CompoundTests
             var groups = c.EntityGroups.Select(g => (g.Layer, g.Slot, Sensor: false)).Concat(c.SensorGroups.Select(g => (g.Layer, g.Slot, Sensor: true))).ToList();
             for (int k = 0; k < groups.Count; k++)
             {
-                if (c.GetShape(StaticCompoundBody.FirstShapeSection + k)?.RootObject is not { TypeName: "hknpCompoundShape" } root) continue;
-                List<TagObject> instances = [.. root.GetObject("instances").GetArray("elements").Elements];
+                if (c.GetShape(StaticCompoundBody.FirstShapeSection + k)?.Root is not { ClassName: "hknpCompoundShape" } root) continue;
+                object?[] instances = Instances(root);
                 for (int i = 0; i < c.Bodies.Count; i++)
                 {
                     CompoundBody b = c.Bodies[i];
                     if (b.Layer != groups[k].Layer || b.IsSensor != groups[k].Sensor || c.Actors[b.ActorIndex].PlacementSlot != groups[k].Slot) continue;
                     Interlocked.Increment(ref checkedBodies);
-                    if (b.Instance >= instances.Count || instances[b.Instance].GetInt64("shapeTag") != i)
+                    if (b.Instance >= instances.Length || ShapeTag(instances[b.Instance]) != i)
                         problems.Add($"{name}: body {i} is not instance {b.Instance} of section {StaticCompoundBody.FirstShapeSection + k}");
                 }
             }
@@ -77,7 +77,7 @@ public class CompoundTests
             var meshes = c.ExternalMeshes;
             if (meshes.Count != c.ExternalMeshCount) problems.Add($"{name}: {meshes.Count} of {c.ExternalMeshCount} external meshes");
             foreach (CompoundExternalMesh m in meshes)
-                if (c.GetShape(m.Section)?.RootObject?.TypeName != "hknpMeshShape") problems.Add($"{name}: external mesh in section {m.Section} is not a mesh");
+                if (c.GetShape(m.Section)?.Root?.ClassName != "hknpMeshShape") problems.Add($"{name}: external mesh in section {m.Section} is not a mesh");
             if (Path.GetFileName(name).StartsWith("MainField_") || Path.GetFileName(name).StartsWith("MinusField_"))
             {
                 if (meshes.Count != 1) problems.Add($"{name}: field tile with {meshes.Count} external meshes");
@@ -125,11 +125,11 @@ public class CompoundTests
             var shapes = c.ShapeSections.ToList();
             for (int k = 0; k < groups.Count && k < shapes.Count; k++)
             {
-                if (c.GetShape(shapes[k])?.RootObject is not { TypeName: "hknpCompoundShape" } root) continue;
+                if (c.GetShape(shapes[k])?.Root is not { ClassName: "hknpCompoundShape" } root) continue;
                 Interlocked.Increment(ref sections);
-                foreach (TagObject instance in root.GetObject("instances").GetArray("elements").Elements)
+                foreach (object? instance in Instances(root))
                 {
-                    long index = instance.GetInt64("shapeTag");
+                    long index = ShapeTag(instance);
                     if (index < 0 || index >= c.Bodies.Count) continue;
                     CompoundBody body = c.Bodies[(int)index];
                     if (body.Layer != groups[k].Layer || body.IsSensor != groups[k].Sensor)
@@ -166,4 +166,29 @@ public class CompoundTests
         problems.AssertNone();
         Assert.True(placed > 2000, $"only {placed} actors name a placement");
     }
+
+    [TotkCorpusFact]
+    public void AShapeCanGrowAnInstance()
+    {
+        string path = Directory.EnumerateFiles(Path.Combine(Corpus.TotkRoot!, "Phive", "StaticCompoundBody", "MainField"), "MainField_E-4*.bphsc.zs").First();
+        using ZsDicSharp.ZsDic zs = ZsDicSharp.ZsDic.FromRomfs(Corpus.TotkRoot!);
+        StaticCompoundBody c = StaticCompoundBody.FromBinary(zs.DecompressFile(path));
+        int section = c.ShapeSections.First(i => c.GetShape(i)?.Root?.ClassName == "hknpCompoundShape");
+
+        HkTagfile shape = c.GetShape(section)!;
+        HkStruct instances = (HkStruct)shape.Root!["instances"]!;
+        int at = instances.Class.IndexOf("elements");
+        object?[] before = (object?[])instances.Values[at]!;
+        instances.Values[at] = before.Append(before[0]).ToArray();
+        c.SetShape(section, shape);
+
+        object?[] after = Instances(StaticCompoundBody.FromBinary(c.ToBinary()).GetShape(section)!.Root!);
+        Assert.Equal(before.Length + 1, after.Length);
+        Assert.Equal(ShapeTag(before[0]), ShapeTag(after[^1]));
+        Assert.IsType<HkObject>(((HkStruct)after[^1]!)["shape"]);
+    }
+
+    private static object?[] Instances(HkObject compound) => (object?[])((HkStruct)compound["instances"]!)["elements"]!;
+
+    private static long ShapeTag(object? instance) => Convert.ToInt64(((HkStruct)instance!)["shapeTag"]);
 }

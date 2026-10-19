@@ -1,4 +1,4 @@
-using PhiveSharp.Havok;
+using HkxSharp;
 
 namespace PhiveSharp;
 
@@ -28,7 +28,7 @@ public sealed class PhiveShape
     /// <exception cref="InvalidDataException">The container does not hold a shape.</exception>
     public static PhiveShape FromContainer(PhiveFile container)
     {
-        if (!TagFile.IsTagFile(container[ShapeSection]))
+        if (!HkTagfile.IsTagfile(container[ShapeSection]))
             throw new InvalidDataException("Section 0 does not hold a Havok tagfile.");
 
         PhiveShape shape = new(container);
@@ -38,9 +38,9 @@ public sealed class PhiveShape
     }
 
     /// <summary>The Havok shape, parsed fresh; put it back with <see cref="SetShape"/>.</summary>
-    public TagFile GetShape() => TagFile.FromBinary(Container[ShapeSection]);
+    public HkTagfile GetShape() => HkTagfile.FromBinary(Container[ShapeSection]);
 
-    public void SetShape(TagFile shape) => Container.SetSection(ShapeSection, shape.ToBinary());
+    public void SetShape(HkTagfile shape) => Container.SetSection(ShapeSection, HkTagfileWriter.Write(shape));
 
     public byte[] ToBinary()
     {

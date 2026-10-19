@@ -2,7 +2,8 @@
 
 A C# reader and writer for **Phive**, the container Nintendo wraps Havok physics data in for
 *Tears of the Kingdom* — the static compound bodies under `Phive/StaticCompoundBody`, the
-shapes, the navmeshes, the cloth — and for the Havok tagfiles inside them.
+shapes, the navmeshes, the cloth. The Havok tagfiles inside them are read and written with
+HkxSharp.
 
 ```csharp
 StaticCompoundBody compound = StaticCompoundBody.FromBinary(decompressed);
@@ -15,12 +16,11 @@ foreach (CompoundActor actor in compound.Actors.Where(a => a.HasBodies))
 
 foreach (int section in compound.ShapeSections)
 {
-    if (compound.GetShape(section)?.RootObject is not { TypeName: "hknpCompoundShape" } shape) continue;
+    if (compound.GetShape(section)?.Root is not { ClassName: "hknpCompoundShape" } shape) continue;
 
-    foreach (TagObject instance in shape.GetArray("instances").Elements)
-        Console.WriteLine($"{instance.GetVector("translation")} " +
-                          $"tag {instance.GetInt64("shapeTag")} " +
-                          $"{instance.GetPointer("shape")?.TypeName}");   // hknpMeshShape, hknpCylinderShape …
+    foreach (HkStruct instance in (object?[])((HkStruct)shape["instances"]!)["elements"]!)
+        Console.WriteLine($"body {instance["shapeTag"]} " +
+                          $"{(instance["shape"] as HkObject)?.ClassName}");   // hknpMeshShape, hknpCylinderShape …
 }
 ```
 
@@ -33,7 +33,7 @@ compound.WriteTo("Cave_Akkala_0005.Nin_NX_NVN.bphsc");
 
 **Zstd is not handled here.** Every Phive file on disc is compressed against a shipped
 dictionary; decompress first — `ZsDicSharp` does that — and compress the bytes this gives back.
-There are no dependencies.
+The one dependency is HkxSharp, expected next to this repository.
 
 Read and written back untouched, all 13,534 Phive files in the dump this was written against
 come out byte for byte identical — static compounds included, hash map and body table and all —
@@ -49,23 +49,10 @@ as against "there is no section 5". A static compound's mesh shapes are not tagf
 sections; each one is a whole second Phive container, version 1, nested inside a section of the
 version 2 one, with the tagfile in *its* first section.
 
-**A tagfile's chunk sizes are big endian in an otherwise little endian file**, and its string
-tables pad with `0xFF` rather than with zeroes while every other table pads with zeroes. Both
-matter only when writing, and both will silently corrupt a file that ignores them.
-
 **Static compound shapes carry no pointer patch table.** Havok tagfiles normally store pointers
 as item indices and patch them on load. Here the arrays are relative — `hkRelArray` keeps a
 signed offset from its own address — so the data is position independent and there is nothing to
 patch. Navmeshes, which use ordinary pointers, do have the table.
-
-**The type table is sparse, and typedefs carry nothing.** `hkReal` is a name with a parent of
-`float` and no size, format or fields of its own, so anything reading a value has to walk up the
-parent chain first. `TagFile.ResolveFormat`, `ResolveByteSize` and `ResolveFields` do that.
-
-**A member can carry a tuple length between its flags and its offset.** Field flag `0x80` puts an
-extra packed integer in the middle of the member record. Missing it does not fail loudly: the
-parse stays in step for a while and then reads a field name index that happens to be in range,
-and the type table comes out quietly wrong.
 
 **The actor hash map is reproducible, so it can be rebuilt rather than preserved.** Sections 2
 and 3 are an open addressed map with twice as many slots as there are actors, a slot of
@@ -136,9 +123,8 @@ named from `Phive/Config/PhiveConfig.byml`'s own tables, but some bits are still
 - bit 24 of a navmesh face, set on a few thousand, which the game's pathfinding filters do not read;
 - a second hash a few water records carry, which nothing building the water reads.
 
-Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
-shape tag changed — but nothing here grows an array or adds an object. That would move every item
-offset and every relative array in the file, which is a rebuild, not an edit.
+A tagfile is decoded into objects and written back out from them, so a shape can be edited
+freely - arrays grown, objects added - and `SetShape`, `SetNavMesh` put it back.
 
 ## Build
 

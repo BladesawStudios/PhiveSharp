@@ -1,4 +1,4 @@
-using PhiveSharp.Havok;
+using HkxSharp;
 
 namespace PhiveSharp.Tests;
 
@@ -62,14 +62,11 @@ public class NavMeshTests
         Corpus.ForEachFile((name, _, data) =>
         {
             PhiveNavMesh mesh = PhiveNavMesh.FromBinary(data);
-            if (mesh.GetNavMesh().RootObject is not { } root) return;
-            foreach (TagObject variant in root.GetArray("namedVariants").Elements)
+            foreach (int[] faceData in FaceData(mesh))
             {
-                if (variant.GetPointer("variant") is not { TypeName: "hkaiNavMesh" } nav) continue;
-                TagArray faceData = nav.GetArray("faceData");
-                for (int i = 0; i < faceData.Count; i++)
+                for (int i = 0; i < faceData.Length; i++)
                 {
-                    PhiveNavFace face = new((int)faceData.GetInt64(i));
+                    PhiveNavFace face = new(faceData[i]);
                     if (face.MaterialName is null) problems.Add($"{name}: face {i} material {face.Material}");
                     if (face.LinkedActor >= mesh.LinkedActors.Count) problems.Add($"{name}: face {i} links actor {face.LinkedActor} of {mesh.LinkedActors.Count}");
                     if (face.LinkedActor >= 0) Interlocked.Increment(ref linked);
@@ -89,14 +86,9 @@ public class NavMeshTests
         Corpus.ForEachFile((name, _, data) =>
         {
             if (!name.Contains("StitchedNavMesh")) return;
-            if (PhiveNavMesh.FromBinary(data).GetNavMesh().RootObject is not { } root) return;
-            foreach (TagObject variant in root.GetArray("namedVariants").Elements)
+            foreach (int[] faceData in FaceData(PhiveNavMesh.FromBinary(data)))
             {
-                if (variant.GetPointer("variant") is not { TypeName: "hkaiNavMesh" } nav) continue;
-                TagArray faceData = nav.GetArray("faceData");
-                long roads = 0;
-                for (int i = 0; i < faceData.Count; i++)
-                    if (new PhiveNavFace((int)faceData.GetInt64(i)).UserTagNames.Contains("Road")) roads++;
+                long roads = faceData.LongCount(v => new PhiveNavFace(v).UserTagNames.Contains("Road"));
                 Interlocked.Add(ref name.Contains("MinusField") ? ref depths : ref surface, roads);
             }
         }, ".bphnm");
@@ -104,4 +96,10 @@ public class NavMeshTests
         Assert.Equal(0, depths);
         Assert.True(surface > 10000, $"only {surface} road faces on the surface");
     }
+
+    private static IEnumerable<int[]> FaceData(PhiveNavMesh mesh) =>
+        mesh.GetNavMesh().Root?["namedVariants"] is object?[] variants
+            ? variants.Select(v => ((HkStruct)v!)["variant"]).OfType<HkObject>()
+                .Where(o => o.ClassName == "hkaiNavMesh").Select(o => (int[])o["faceData"]!)
+            : [];
 }

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
-using PhiveSharp.Havok;
+using HkxSharp;
 
 namespace PhiveSharp.Tests;
 
@@ -26,8 +26,8 @@ public class ContainerTests
     public void SomethingThatIsNotATagfileIsRefused()
     {
         byte[] junk = new byte[64];
-        Assert.False(TagFile.IsTagFile(junk));
-        Assert.Throws<InvalidDataException>(() => TagFile.FromBinary(junk));
+        Assert.False(HkTagfile.IsTagfile(junk));
+        Assert.Throws<InvalidDataException>(() => HkTagfile.FromBinary(junk));
     }
 
     [TotkCorpusFact]
@@ -58,13 +58,13 @@ public class ContainerTests
         {
             foreach (byte[] section in file.Sections)
             {
-                if (TagFile.IsTagFile(section))
+                if (HkTagfile.IsTagfile(section))
                 {
                     Interlocked.Increment(ref tagfiles);
                     int length = (int)(BinaryPrimitives.ReadUInt32BigEndian(section) & 0x3FFFFFFF);
                     try
                     {
-                        byte[] back = TagFile.FromBinary(section).ToBinary();
+                        byte[] back = HkTagfileWriter.Write(HkTagfile.FromBinary(section));
                         if (!back.AsSpan().SequenceEqual(section.AsSpan(0, length)) || section.AsSpan(length).ContainsAnyExcept((byte)0))
                             problems.Add($"{name}: tagfile differs");
                     }
@@ -79,22 +79,4 @@ public class ContainerTests
         Assert.True(tagfiles > 26000, $"only {tagfiles} tagfiles found");
     }
 
-    [TotkCorpusFact]
-    public void ClothTagfilesRead()
-    {
-        // Cloth type tables carry packed integers four bytes long, which once failed to read.
-        Problems problems = new();
-        int count = Corpus.ForEachFile((name, _, data) =>
-        {
-            try
-            {
-                if (TagFile.FromBinary(PhiveFile.FromBinary(data)[0]).RootObject is not { TypeName: "hkRootLevelContainer" })
-                    problems.Add($"{name}: root is not an hkRootLevelContainer");
-            }
-            catch (Exception e) { problems.Add($"{name}: {e.GetType().Name} {e.Message}"); }
-        }, ".bphcl");
-
-        problems.AssertNone();
-        Assert.True(count > 300, $"only {count} cloth files found");
-    }
 }

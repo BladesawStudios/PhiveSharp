@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using PhiveSharp.Havok;
+using HkxSharp;
 
 namespace PhiveSharp;
 
@@ -46,7 +46,7 @@ public sealed class PhiveNavMesh
     /// <exception cref="InvalidDataException">The container does not hold a navmesh.</exception>
     public static PhiveNavMesh FromContainer(PhiveFile container)
     {
-        if (!TagFile.IsTagFile(container[NavMeshSection]))
+        if (!HkTagfile.IsTagfile(container[NavMeshSection]))
             throw new InvalidDataException("Section 0 does not hold a Havok tagfile.");
         ReadOnlySpan<byte> info = container[InfoSection];
         if (info.Length != InfoSize) throw new InvalidDataException($"Section 1 is {info.Length} bytes; a navmesh's is {InfoSize}.");
@@ -60,9 +60,9 @@ public sealed class PhiveNavMesh
     }
 
     /// <summary>The Havok navmesh, parsed fresh; put it back with <see cref="SetNavMesh"/>.</summary>
-    public TagFile GetNavMesh() => TagFile.FromBinary(Container[NavMeshSection]);
+    public HkTagfile GetNavMesh() => HkTagfile.FromBinary(Container[NavMeshSection]);
 
-    public void SetNavMesh(TagFile navMesh) => Container.SetSection(NavMeshSection, navMesh.ToBinary());
+    public void SetNavMesh(HkTagfile navMesh) => Container.SetSection(NavMeshSection, HkTagfileWriter.Write(navMesh));
 
     public byte[] ToBinary()
     {
