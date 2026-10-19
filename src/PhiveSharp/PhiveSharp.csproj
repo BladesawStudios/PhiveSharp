@@ -10,11 +10,11 @@
     <Authors>Aiden A</Authors>
     <Description>Reader and writer for Phive, the Havok physics container used by Tears of the Kingdom, and the static compound bodies it holds.</Description>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
-    <LibRoot Condition="'$(LibRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..</LibRoot>
+    <PhiveLibRoot Condition="'$(PhiveLibRoot)' == ''">$(MSBuildThisFileDirectory)..\..\lib</PhiveLibRoot>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(LibRoot)\HkxSharp\src\HkxSharp\HkxSharp.csproj" />
+    <ProjectReference Include="$(PhiveLibRoot)\HkxSharp\src\HkxSharp\HkxSharp.csproj" />
   </ItemGroup>
 
 </Project>

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <LibRoot Condition="'$(LibRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..</LibRoot>
+    <PhiveLibRoot Condition="'$(PhiveLibRoot)' == ''">$(MSBuildThisFileDirectory)..\..\lib</PhiveLibRoot>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,8 +22,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PhiveSharp\PhiveSharp.csproj" />
-    <ProjectReference Include="$(LibRoot)\SarcSharp\src\SarcSharp\SarcSharp.csproj" />
-    <ProjectReference Include="$(LibRoot)\ZsDicSharp\src\ZsDicSharp\ZsDicSharp.csproj" />
+    <ProjectReference Include="$(PhiveLibRoot)\SarcSharp\src\SarcSharp\SarcSharp.csproj" />
+    <ProjectReference Include="$(PhiveLibRoot)\ZsDicSharp\src\ZsDicSharp\ZsDicSharp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

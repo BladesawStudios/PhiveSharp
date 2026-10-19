@@ -33,7 +33,7 @@ compound.WriteTo("Cave_Akkala_0005.Nin_NX_NVN.bphsc");
 
 **Zstd is not handled here.** Every Phive file on disc is compressed against a shipped
 dictionary; decompress first — `ZsDicSharp` does that — and compress the bytes this gives back.
-The one dependency is HkxSharp, expected next to this repository.
+The one dependency is HkxSharp, a submodule in `lib` - clone with `--recursive`.
 
 Read and written back untouched, all 13,534 Phive files in the dump this was written against
 come out byte for byte identical — static compounds included, hash map and body table and all —
