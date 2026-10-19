@@ -92,8 +92,9 @@ carried through as bytes.
 
 Sections 5 to 10 of a static compound are kept as bytes. A body's run of entries in the property
 tables in sections 5 and 6 reads as its material palette (`MaterialsOf`), the same sixteen byte
-material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`), but
-material and flag values are numbers, not names. The terrain collision is not decoded.
+material and eight byte filter entries a shape keeps in its sections 1 and 2 (`PhiveShape`). Materials,
+sub materials, flags and the layers a filter hits are named from `Phive/Config/PhiveConfig.byml`'s own
+tables. The terrain collision is not decoded.
 
 Inside a tagfile, values can be read and written in place — a transform moved, a flag set, a
 shape tag changed — but nothing here grows an array or adds an object. That would move every item
